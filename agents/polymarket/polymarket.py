@@ -355,6 +355,7 @@ class Polymarket:
         balance_res = self.usdc.functions.balanceOf(
             self.get_address_for_private_key()
         ).call()
+        print("Balance res: balance_res", balance_res)
         return float(balance_res / 10e5)
 
 
