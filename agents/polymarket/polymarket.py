@@ -218,20 +218,20 @@ class Polymarket:
 
     def map_api_to_market(self, market, token_id: str = "") -> SimpleMarket:
         market = {
-            "id": int(market["id"]),
-            "question": market["question"],
-            "end": market["endDate"],
-            "description": market["description"],
-            "active": market["active"],
-            # "deployed": market["deployed"],
-            "funded": market["funded"],
-            "rewardsMinSize": float(market["rewardsMinSize"]),
-            "rewardsMaxSpread": float(market["rewardsMaxSpread"]),
-            # "volume": float(market["volume"]),
-            "spread": float(market["spread"]),
-            "outcomes": str(market["outcomes"]),
-            "outcome_prices": str(market["outcomePrices"]),
-            "clob_token_ids": str(market["clobTokenIds"]),
+            "id": int(market.get("id", 0)),
+            "question": market.get("question", ""),
+            "end": market.get("endDate", market.get("end", "")),
+            "description": market.get("description", ""),
+            "active": market.get("active", False),
+            # "deployed": market.get("deployed"),
+            "funded": market.get("funded", False),
+            "rewardsMinSize": float(market.get("rewardsMinSize", 0)),
+            "rewardsMaxSpread": float(market.get("rewardsMaxSpread", 0)),
+            # "volume": float(market.get("volume", 0)),
+            "spread": float(market.get("spread", 0)),
+            "outcomes": str(market.get("outcomes", "")),
+            "outcome_prices": str(market.get("outcomePrices", "")),
+            "clob_token_ids": str(market.get("clobTokenIds", "")),
         }
         if token_id:
             market["clob_token_ids"] = token_id
