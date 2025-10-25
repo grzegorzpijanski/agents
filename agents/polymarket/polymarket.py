@@ -217,7 +217,7 @@ class Polymarket:
             return self.map_api_to_market(market, token_id)
 
     def map_api_to_market(self, market, token_id: str = "") -> SimpleMarket:
-        market = {
+        market_data = {
             "id": int(market.get("id", 0)),
             "question": market.get("question", ""),
             "end": market.get("endDate", market.get("end", "")),
@@ -234,8 +234,8 @@ class Polymarket:
             "clob_token_ids": str(market.get("clobTokenIds", "")),
         }
         if token_id:
-            market["clob_token_ids"] = token_id
-        return market
+            market_data["clob_token_ids"] = token_id
+        return SimpleMarket(**market_data)
 
     def get_all_events(self) -> "list[SimpleEvent]":
         events = []
