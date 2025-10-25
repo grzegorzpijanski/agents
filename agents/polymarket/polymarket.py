@@ -217,6 +217,21 @@ class Polymarket:
             return self.map_api_to_market(market, token_id)
 
     def map_api_to_market(self, market, token_id: str = "") -> SimpleMarket:
+        # Parse outcomes and prices as lists if they exist
+        outcomes_raw = market.get("outcomes", "")
+        prices_raw = market.get("outcomePrices", "")
+
+        # Convert to lists if they're in the response
+        outcome_prices_list = None
+        if isinstance(prices_raw, list):
+            outcome_prices_list = prices_raw
+        elif isinstance(prices_raw, str) and prices_raw:
+            try:
+                import ast
+                outcome_prices_list = ast.literal_eval(prices_raw)
+            except:
+                pass
+
         market_data = {
             "id": int(market.get("id", 0)),
             "question": market.get("question", ""),
@@ -229,9 +244,10 @@ class Polymarket:
             "rewardsMaxSpread": float(market.get("rewardsMaxSpread", 0)),
             # "volume": float(market.get("volume", 0)),
             "spread": float(market.get("spread", 0)),
-            "outcomes": str(market.get("outcomes", "")),
-            "outcome_prices": str(market.get("outcomePrices", "")),
+            "outcomes": str(outcomes_raw),
+            "outcome_prices": str(prices_raw),
             "clob_token_ids": str(market.get("clobTokenIds", "")),
+            "outcomePrices": outcome_prices_list,  # List version
         }
         if token_id:
             market_data["clob_token_ids"] = token_id
