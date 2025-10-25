@@ -217,6 +217,15 @@ class Polymarket:
             return self.map_api_to_market(market, token_id)
 
     def map_api_to_market(self, market, token_id: str = "") -> SimpleMarket:
+        # DEBUG: Log available fields (first 3 markets only)
+        if not hasattr(self, '_debug_count'):
+            self._debug_count = 0
+        if self._debug_count < 3:
+            import logging
+            logging.info(f"DEBUG Market API fields: {list(market.keys())}")
+            logging.info(f"DEBUG Liquidity fields: liquidity={market.get('liquidity')}, liquidityClob={market.get('liquidityClob')}, liquidityNum={market.get('liquidityNum')}")
+            self._debug_count += 1
+
         # Parse outcomes and prices as lists if they exist
         outcomes_raw = market.get("outcomes", "")
         prices_raw = market.get("outcomePrices", "")
