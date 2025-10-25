@@ -232,6 +232,22 @@ class Polymarket:
             except:
                 pass
 
+        # Parse liquidity - try multiple field names
+        liquidity = None
+        if "liquidity" in market:
+            liquidity = float(market["liquidity"]) if market["liquidity"] else None
+        elif "liquidityClob" in market:
+            liquidity = float(market["liquidityClob"]) if market["liquidityClob"] else None
+        elif "liquidityNum" in market:
+            liquidity = float(market["liquidityNum"]) if market["liquidityNum"] else None
+
+        # Parse volume
+        volume = None
+        if "volume" in market:
+            volume = float(market["volume"]) if market["volume"] else None
+        elif "volume24hr" in market:
+            volume = float(market["volume24hr"]) if market["volume24hr"] else None
+
         market_data = {
             "id": int(market.get("id", 0)),
             "question": market.get("question", ""),
@@ -242,12 +258,13 @@ class Polymarket:
             "funded": market.get("funded", False),
             "rewardsMinSize": float(market.get("rewardsMinSize", 0)),
             "rewardsMaxSpread": float(market.get("rewardsMaxSpread", 0)),
-            # "volume": float(market.get("volume", 0)),
             "spread": float(market.get("spread", 0)),
             "outcomes": str(outcomes_raw),
             "outcome_prices": str(prices_raw),
             "clob_token_ids": str(market.get("clobTokenIds", "")),
             "outcomePrices": outcome_prices_list,  # List version
+            "liquidity": liquidity,
+            "volume": volume,
         }
         if token_id:
             market_data["clob_token_ids"] = token_id
