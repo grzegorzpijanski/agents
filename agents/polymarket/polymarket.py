@@ -201,6 +201,40 @@ class Polymarket:
                     pass
         return markets
 
+    def get_available_tags(self, markets: "list[SimpleMarket]" = None) -> dict:
+        """
+        Discover all unique tags from markets.
+
+        If markets list not provided, fetches raw sampling data (cheap - only 1 API call)
+        to discover available tags without fetching full market details.
+
+        Args:
+            markets: Optional list of markets to analyze. If None, fetches raw data.
+
+        Returns:
+            Dictionary with tag counts: {tag_slug: count}
+        """
+        tag_counts = {}
+
+        if markets is not None:
+            # Analyze provided markets
+            for market in markets:
+                if market is not None and market.tags:
+                    for tag in market.tags:
+                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        else:
+            # Fetch raw data (cheap - 1 API call) to discover tags
+            raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
+            for raw_market in raw_sampling_simplified_markets["data"]:
+                raw_tags = raw_market.get("tags", [])
+                if raw_tags:
+                    for tag in raw_tags:
+                        tag_slug = tag.get("slug", tag.get("label", ""))
+                        if tag_slug:
+                            tag_counts[tag_slug] = tag_counts.get(tag_slug, 0) + 1
+
+        return dict(sorted(tag_counts.items(), key=lambda x: x[1], reverse=True))
+
     def filter_markets_for_trading(self, markets: "list[SimpleMarket]", allowed_categories: "list[str]" = None):
         """
         Filter markets for trading based on active status and optionally by categories.
@@ -246,6 +280,9 @@ class Polymarket:
             import logging
             logging.info(f"DEBUG Market API fields: {list(market.keys())}")
             logging.info(f"DEBUG Liquidity fields: liquidity={market.get('liquidity')}, liquidityClob={market.get('liquidityClob')}, liquidityNum={market.get('liquidityNum')}")
+            if 'tags' in market and market['tags']:
+                tag_slugs = [tag.get('slug', tag.get('label', '')) for tag in market['tags']]
+                logging.info(f"DEBUG Tags: {tag_slugs}")
             self._debug_count += 1
 
         # Parse outcomes and prices as lists if they exist
@@ -364,15 +401,50 @@ class Polymarket:
         all_events = self.get_all_events()
         return self.filter_events_for_trading(all_events)
 
-    def get_sampling_simplified_markets(self) -> "list[SimpleEvent]":
+    def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None) -> "list[SimpleEvent]":
+        """
+        Get sampling of simplified markets, optionally filtered by categories.
+
+        Args:
+            allowed_categories: Optional list of tag slugs to filter by.
+                               Filtering happens BEFORE fetching full market details, saving API calls.
+
+        Returns:
+            List of markets (only fetches full details for filtered subset)
+        """
         markets = []
         raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
+
+        total_markets = len(raw_sampling_simplified_markets["data"])
+        filtered_count = 0
+
         for raw_market in raw_sampling_simplified_markets["data"]:
+            # If category filtering is enabled, check tags BEFORE fetching full market details
+            if allowed_categories:
+                # Check if this raw market has matching tags
+                raw_tags = raw_market.get("tags", [])
+                if raw_tags:
+                    # Extract tag slugs
+                    tag_slugs = [tag.get("slug", tag.get("label", "")) for tag in raw_tags if tag]
+                    # Skip if no matching tags
+                    if not any(tag in allowed_categories for tag in tag_slugs):
+                        filtered_count += 1
+                        continue
+                else:
+                    # No tags means skip if filtering is enabled
+                    filtered_count += 1
+                    continue
+
             token_one_id = raw_market["tokens"][0]["token_id"]
             market = self.get_market(token_one_id)
             # Skip markets that failed to fetch
             if market is not None:
                 markets.append(market)
+
+        if allowed_categories:
+            import logging
+            logging.info(f"Category filter: Skipped {filtered_count}/{total_markets} markets, fetching {len(markets)} detailed market data")
+
         return markets
 
     def get_orderbook(self, token_id: str) -> OrderBookSummary:
