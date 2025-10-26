@@ -487,32 +487,16 @@ class Polymarket:
             token_one_id = raw_market["tokens"][0]["token_id"]
             token_ids_to_fetch.append(token_one_id)
 
-        # If we have tokens that need fetching, try batch fetch first
+        # If we have tokens that need fetching, fetch them individually
+        # (Batch fetch fails with "URL too long" for large lists)
         if token_ids_to_fetch:
             import logging
-            logging.info(f"Need to fetch {len(token_ids_to_fetch)} markets with incomplete raw data")
+            logging.info(f"Fetching {len(token_ids_to_fetch)} market details individually...")
 
-            if use_batch_fetch:
-                # Try batch fetch (1 API call for all)
-                logging.info(f"Attempting batch fetch of {len(token_ids_to_fetch)} markets...")
-                batch_markets = self.get_markets_batch(token_ids_to_fetch)
-
-                if batch_markets and len(batch_markets) > 0:
-                    markets.extend(batch_markets)
-                    logging.info(f"✅ Batch fetch successful: {len(batch_markets)} markets")
-                else:
-                    # Batch failed, fall back to individual calls
-                    logging.warning(f"Batch fetch failed or returned no data, falling back to individual calls")
-                    for token_id in token_ids_to_fetch:
-                        market = self.get_market(token_id)
-                        if market is not None:
-                            markets.append(market)
-            else:
-                # Individual fetch
-                for token_id in token_ids_to_fetch:
-                    market = self.get_market(token_id)
-                    if market is not None:
-                        markets.append(market)
+            for token_id in token_ids_to_fetch:
+                market = self.get_market(token_id)
+                if market is not None:
+                    markets.append(market)
 
         if allowed_categories:
             import logging
