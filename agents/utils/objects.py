@@ -44,6 +44,7 @@ class SimpleMarket(BaseModel):
     clob_token_ids: Optional[str]
     # List versions for compatibility with agent code
     outcomePrices: Optional[list] = None
+    outcomesList: Optional[list] = None  # Parsed outcomes list
     liquidity: Optional[float] = None
     volume: Optional[float] = None
     tags: Optional[list] = None  # List of tag slugs for filtering

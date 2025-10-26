@@ -224,11 +224,10 @@ class Polymarket:
                         tag_counts[tag] = tag_counts.get(tag, 0) + 1
         else:
             # Fetch raw data (cheap - 1 API call) to discover tags
-            import logging
             try:
                 raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
                 total_markets = len(raw_sampling_simplified_markets.get("data", []))
-                logging.info(f"Discovering tags from {total_markets} raw markets")
+                print(f"[TAG DISCOVERY] Discovering tags from {total_markets} raw markets")
 
                 markets_with_tags = 0
                 for raw_market in raw_sampling_simplified_markets["data"]:
@@ -240,9 +239,11 @@ class Polymarket:
                             if tag_slug:
                                 tag_counts[tag_slug] = tag_counts.get(tag_slug, 0) + 1
 
-                logging.info(f"Found {len(tag_counts)} unique tags across {markets_with_tags}/{total_markets} markets")
+                print(f"[TAG DISCOVERY] Found {len(tag_counts)} unique tags across {markets_with_tags}/{total_markets} markets")
             except Exception as e:
-                logging.error(f"Error discovering tags: {e}")
+                print(f"[TAG DISCOVERY ERROR] {e}")
+                import traceback
+                traceback.print_exc()
                 return {}
 
         return dict(sorted(tag_counts.items(), key=lambda x: x[1], reverse=True))
@@ -333,7 +334,7 @@ class Polymarket:
         outcomes_raw = market.get("outcomes", "")
         prices_raw = market.get("outcomePrices", "")
 
-        # Convert to lists if they're in the response
+        # Convert prices to list
         outcome_prices_list = None
         if isinstance(prices_raw, list):
             outcome_prices_list = prices_raw
@@ -341,6 +342,17 @@ class Polymarket:
             try:
                 import ast
                 outcome_prices_list = ast.literal_eval(prices_raw)
+            except:
+                pass
+
+        # Convert outcomes to list
+        outcomes_list = None
+        if isinstance(outcomes_raw, list):
+            outcomes_list = outcomes_raw
+        elif isinstance(outcomes_raw, str) and outcomes_raw:
+            try:
+                import ast
+                outcomes_list = ast.literal_eval(outcomes_raw)
             except:
                 pass
 
@@ -386,6 +398,7 @@ class Polymarket:
             "outcome_prices": str(prices_raw),
             "clob_token_ids": str(market.get("clobTokenIds", "")),
             "outcomePrices": outcome_prices_list,  # List version
+            "outcomesList": outcomes_list,  # List version
             "liquidity": liquidity,
             "volume": volume,
             "tags": tags,
@@ -490,8 +503,7 @@ class Polymarket:
         # If we have tokens that need fetching, fetch them individually
         # (Batch fetch fails with "URL too long" for large lists)
         if token_ids_to_fetch:
-            import logging
-            logging.info(f"Fetching {len(token_ids_to_fetch)} market details individually...")
+            print(f"[MARKET FETCH] Fetching {len(token_ids_to_fetch)} market details individually...")
 
             for token_id in token_ids_to_fetch:
                 market = self.get_market(token_id)
@@ -499,8 +511,7 @@ class Polymarket:
                     markets.append(market)
 
         if allowed_categories:
-            import logging
-            logging.info(f"Category filter: Skipped {filtered_count}/{total_markets} markets, using {len(markets)} markets")
+            print(f"[CATEGORY FILTER] Skipped {filtered_count}/{total_markets} markets, fetched {len(markets)} matching markets")
 
         return markets
 
