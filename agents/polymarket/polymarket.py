@@ -264,6 +264,38 @@ class Polymarket:
 
         return tradeable_markets
 
+    def get_markets_batch(self, token_ids: "list[str]") -> "list[SimpleMarket]":
+        """
+        Fetch multiple markets in a single API call.
+
+        Args:
+            token_ids: List of token IDs to fetch
+
+        Returns:
+            List of SimpleMarket objects
+        """
+        if not token_ids:
+            return []
+
+        # Try comma-separated token IDs (may or may not work - depends on API)
+        params = {"clob_token_ids": ",".join(token_ids)}
+        res = httpx.get(self.gamma_markets_endpoint, params=params)
+
+        if res.status_code == 200:
+            data = res.json()
+            markets = []
+            for market in data:
+                try:
+                    token_id = market.get("clobTokenIds", "")
+                    markets.append(self.map_api_to_market(market, token_id))
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to parse market: {e}")
+                    continue
+            return markets
+
+        return []
+
     def get_market(self, token_id: str) -> SimpleMarket:
         params = {"clob_token_ids": token_id}
         res = httpx.get(self.gamma_markets_endpoint, params=params)
@@ -401,25 +433,29 @@ class Polymarket:
         all_events = self.get_all_events()
         return self.filter_events_for_trading(all_events)
 
-    def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None) -> "list[SimpleEvent]":
+    def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None, use_batch_fetch: bool = True) -> "list[SimpleEvent]":
         """
         Get sampling of simplified markets, optionally filtered by categories.
 
         Args:
             allowed_categories: Optional list of tag slugs to filter by.
                                Filtering happens BEFORE fetching full market details, saving API calls.
+            use_batch_fetch: If True, attempts to fetch all filtered markets in one API call.
+                           Falls back to individual calls if batch fails.
 
         Returns:
-            List of markets (only fetches full details for filtered subset)
+            List of markets (optimized to minimize API calls)
         """
         markets = []
         raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
 
         total_markets = len(raw_sampling_simplified_markets["data"])
         filtered_count = 0
+        token_ids_to_fetch = []
 
+        # First pass: filter and check if we need additional API calls
         for raw_market in raw_sampling_simplified_markets["data"]:
-            # If category filtering is enabled, check tags BEFORE fetching full market details
+            # If category filtering is enabled, check tags BEFORE any fetching
             if allowed_categories:
                 # Check if this raw market has matching tags
                 raw_tags = raw_market.get("tags", [])
@@ -435,15 +471,47 @@ class Polymarket:
                     filtered_count += 1
                     continue
 
-            token_one_id = raw_market["tokens"][0]["token_id"]
-            market = self.get_market(token_one_id)
-            # Skip markets that failed to fetch
-            if market is not None:
+            # Check if raw_market has all the data we need (try to avoid API call)
+            # The raw data should have most fields we need
+            try:
+                # Try to map directly from raw data
+                market = self.map_api_to_market(raw_market)
                 markets.append(market)
+            except Exception as e:
+                # Raw data insufficient, need to fetch full details
+                token_one_id = raw_market["tokens"][0]["token_id"]
+                token_ids_to_fetch.append(token_one_id)
+
+        # If we have tokens that need fetching, try batch fetch first
+        if token_ids_to_fetch:
+            import logging
+            logging.info(f"Need to fetch {len(token_ids_to_fetch)} markets with incomplete raw data")
+
+            if use_batch_fetch:
+                # Try batch fetch (1 API call for all)
+                logging.info(f"Attempting batch fetch of {len(token_ids_to_fetch)} markets...")
+                batch_markets = self.get_markets_batch(token_ids_to_fetch)
+
+                if batch_markets and len(batch_markets) > 0:
+                    markets.extend(batch_markets)
+                    logging.info(f"✅ Batch fetch successful: {len(batch_markets)} markets")
+                else:
+                    # Batch failed, fall back to individual calls
+                    logging.warning(f"Batch fetch failed or returned no data, falling back to individual calls")
+                    for token_id in token_ids_to_fetch:
+                        market = self.get_market(token_id)
+                        if market is not None:
+                            markets.append(market)
+            else:
+                # Individual fetch
+                for token_id in token_ids_to_fetch:
+                    market = self.get_market(token_id)
+                    if market is not None:
+                        markets.append(market)
 
         if allowed_categories:
             import logging
-            logging.info(f"Category filter: Skipped {filtered_count}/{total_markets} markets, fetching {len(markets)} detailed market data")
+            logging.info(f"Category filter: Skipped {filtered_count}/{total_markets} markets, using {len(markets)} markets")
 
         return markets
 
