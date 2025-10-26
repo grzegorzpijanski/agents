@@ -38,6 +38,7 @@ class Polymarket:
         self.gamma_url = "https://gamma-api.polymarket.com"
         self.gamma_markets_endpoint = self.gamma_url + "/markets"
         self.gamma_events_endpoint = self.gamma_url + "/events"
+        self.gamma_tags_endpoint = self.gamma_url + "/tags"
 
         self.clob_url = "https://clob.polymarket.com"
         self.clob_auth_endpoint = self.clob_url + "/auth/api-key"
@@ -199,6 +200,95 @@ class Polymarket:
                 except Exception as e:
                     print(e)
                     pass
+        return markets
+
+    def get_tags_from_api(self) -> dict:
+        """
+        Fetch all available tags/categories from Polymarket API.
+
+        Returns:
+            Dictionary mapping tag labels to tag IDs: {tag_label: tag_id}
+        """
+        try:
+            res = httpx.get(self.gamma_tags_endpoint)
+            if res.status_code == 200:
+                tags_data = res.json()
+                # Build a mapping of label -> id
+                tag_map = {}
+                for tag in tags_data:
+                    label = tag.get("label", tag.get("slug", ""))
+                    tag_id = tag.get("id")
+                    if label and tag_id:
+                        tag_map[label.lower()] = tag_id
+                print(f"[TAGS API] Found {len(tag_map)} tags from API")
+                return tag_map
+            else:
+                print(f"[TAGS API ERROR] Status {res.status_code}")
+                return {}
+        except Exception as e:
+            print(f"[TAGS API ERROR] {e}")
+            return {}
+
+    def get_markets_by_tags(self, tag_labels: "list[str]", limit: int = 100) -> "list[SimpleMarket]":
+        """
+        Fetch markets filtered by specific tag labels using Polymarket API.
+
+        Args:
+            tag_labels: List of tag labels to filter by (e.g., ["politics", "crypto"])
+            limit: Maximum markets to fetch per tag (default: 100)
+
+        Returns:
+            List of markets matching the tags
+        """
+        # Get tag IDs from API
+        tag_map = self.get_tags_from_api()
+
+        markets = []
+        seen_ids = set()
+
+        for tag_label in tag_labels:
+            tag_id = tag_map.get(tag_label.lower())
+            if not tag_id:
+                print(f"[TAGS API] Tag '{tag_label}' not found. Available: {list(tag_map.keys())[:10]}")
+                continue
+
+            print(f"[TAGS API] Fetching markets for tag '{tag_label}' (ID: {tag_id})")
+
+            try:
+                # Fetch markets for this tag
+                params = {
+                    "tag_id": tag_id,
+                    "closed": "false",
+                    "limit": limit,
+                    "offset": 0
+                }
+                res = httpx.get(self.gamma_markets_endpoint, params=params)
+
+                if res.status_code == 200:
+                    markets_data = res.json()
+                    count = 0
+                    for market_data in markets_data:
+                        market_id = market_data.get("id")
+                        # Avoid duplicates if a market has multiple tags
+                        if market_id and market_id not in seen_ids:
+                            seen_ids.add(market_id)
+                            try:
+                                market = self.map_api_to_market(market_data)
+                                markets.append(market)
+                                count += 1
+                            except Exception as e:
+                                print(f"[TAGS API] Failed to map market: {e}")
+                                continue
+
+                    print(f"[TAGS API] Fetched {count} unique markets for tag '{tag_label}'")
+                else:
+                    print(f"[TAGS API ERROR] Status {res.status_code} for tag '{tag_label}'")
+
+            except Exception as e:
+                print(f"[TAGS API ERROR] Failed to fetch markets for tag '{tag_label}': {e}")
+                continue
+
+        print(f"[TAGS API] Total: {len(markets)} unique markets across all tags")
         return markets
 
     def get_available_tags(self, markets: "list[SimpleMarket]" = None) -> dict:
