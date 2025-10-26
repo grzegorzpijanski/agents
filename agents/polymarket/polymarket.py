@@ -483,22 +483,9 @@ class Polymarket:
                     filtered_count += 1
                     continue
 
-            # Check if raw_market has all the data we need (try to avoid API call)
-            # The raw data should have most fields we need
-            try:
-                # Try to map directly from raw data
-                market = self.map_api_to_market(raw_market)
-                markets.append(market)
-            except Exception as e:
-                # Raw data insufficient, need to fetch full details
-                import logging
-                if not hasattr(self, '_map_errors_logged'):
-                    self._map_errors_logged = 0
-                if self._map_errors_logged < 3:
-                    logging.debug(f"Raw data mapping failed (will fetch): {e}")
-                    self._map_errors_logged += 1
-                token_one_id = raw_market["tokens"][0]["token_id"]
-                token_ids_to_fetch.append(token_one_id)
+            # Raw sampling data doesn't have full market details - need to fetch
+            token_one_id = raw_market["tokens"][0]["token_id"]
+            token_ids_to_fetch.append(token_one_id)
 
         # If we have tokens that need fetching, try batch fetch first
         if token_ids_to_fetch:
