@@ -46,6 +46,7 @@ class SimpleMarket(BaseModel):
     outcomePrices: Optional[list] = None
     liquidity: Optional[float] = None
     volume: Optional[float] = None
+    tags: Optional[list] = None  # List of tag slugs for filtering
 
 
 class ClobReward(BaseModel):

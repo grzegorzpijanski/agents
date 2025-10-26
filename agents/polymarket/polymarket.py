@@ -201,12 +201,33 @@ class Polymarket:
                     pass
         return markets
 
-    def filter_markets_for_trading(self, markets: "list[SimpleMarket]"):
+    def filter_markets_for_trading(self, markets: "list[SimpleMarket]", allowed_categories: "list[str]" = None):
+        """
+        Filter markets for trading based on active status and optionally by categories.
+
+        Args:
+            markets: List of markets to filter
+            allowed_categories: Optional list of category slugs to filter by (e.g., ["politics", "crypto"])
+                               If None or empty, all categories are allowed.
+
+        Returns:
+            List of tradeable markets
+        """
         tradeable_markets = []
         for market in markets:
             # Skip None markets defensively
-            if market is not None and market.active:
-                tradeable_markets.append(market)
+            if market is None or not market.active:
+                continue
+
+            # If category filtering is enabled, check if market has matching tags
+            if allowed_categories:
+                market_tags = market.tags if market.tags else []
+                # Market must have at least one tag that matches allowed categories
+                if not any(tag in allowed_categories for tag in market_tags):
+                    continue
+
+            tradeable_markets.append(market)
+
         return tradeable_markets
 
     def get_market(self, token_id: str) -> SimpleMarket:
@@ -258,6 +279,17 @@ class Polymarket:
         elif "volume24hr" in market:
             volume = float(market["volume24hr"]) if market["volume24hr"] else None
 
+        # Parse tags - extract tag slugs for filtering
+        tags = None
+        if "tags" in market and market["tags"]:
+            try:
+                # Extract slug from each tag object
+                tags = [tag.get("slug", tag.get("label", "")) for tag in market["tags"] if tag]
+                # Remove empty strings
+                tags = [t for t in tags if t]
+            except:
+                pass
+
         market_data = {
             "id": int(market.get("id", 0)),
             "question": market.get("question", ""),
@@ -275,6 +307,7 @@ class Polymarket:
             "outcomePrices": outcome_prices_list,  # List version
             "liquidity": liquidity,
             "volume": volume,
+            "tags": tags,
         }
         if token_id:
             market_data["clob_token_ids"] = token_id
