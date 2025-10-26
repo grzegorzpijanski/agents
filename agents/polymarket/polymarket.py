@@ -204,7 +204,8 @@ class Polymarket:
     def filter_markets_for_trading(self, markets: "list[SimpleMarket]"):
         tradeable_markets = []
         for market in markets:
-            if market.active:
+            # Skip None markets defensively
+            if market is not None and market.active:
                 tradeable_markets.append(market)
         return tradeable_markets
 
@@ -336,7 +337,9 @@ class Polymarket:
         for raw_market in raw_sampling_simplified_markets["data"]:
             token_one_id = raw_market["tokens"][0]["token_id"]
             market = self.get_market(token_one_id)
-            markets.append(market)
+            # Skip markets that failed to fetch
+            if market is not None:
+                markets.append(market)
         return markets
 
     def get_orderbook(self, token_id: str) -> OrderBookSummary:
