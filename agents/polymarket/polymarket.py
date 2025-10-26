@@ -224,14 +224,26 @@ class Polymarket:
                         tag_counts[tag] = tag_counts.get(tag, 0) + 1
         else:
             # Fetch raw data (cheap - 1 API call) to discover tags
-            raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
-            for raw_market in raw_sampling_simplified_markets["data"]:
-                raw_tags = raw_market.get("tags", [])
-                if raw_tags:
-                    for tag in raw_tags:
-                        tag_slug = tag.get("slug", tag.get("label", ""))
-                        if tag_slug:
-                            tag_counts[tag_slug] = tag_counts.get(tag_slug, 0) + 1
+            import logging
+            try:
+                raw_sampling_simplified_markets = self.client.get_sampling_simplified_markets()
+                total_markets = len(raw_sampling_simplified_markets.get("data", []))
+                logging.info(f"Discovering tags from {total_markets} raw markets")
+
+                markets_with_tags = 0
+                for raw_market in raw_sampling_simplified_markets["data"]:
+                    raw_tags = raw_market.get("tags", [])
+                    if raw_tags:
+                        markets_with_tags += 1
+                        for tag in raw_tags:
+                            tag_slug = tag.get("slug", tag.get("label", ""))
+                            if tag_slug:
+                                tag_counts[tag_slug] = tag_counts.get(tag_slug, 0) + 1
+
+                logging.info(f"Found {len(tag_counts)} unique tags across {markets_with_tags}/{total_markets} markets")
+            except Exception as e:
+                logging.error(f"Error discovering tags: {e}")
+                return {}
 
         return dict(sorted(tag_counts.items(), key=lambda x: x[1], reverse=True))
 
@@ -479,6 +491,12 @@ class Polymarket:
                 markets.append(market)
             except Exception as e:
                 # Raw data insufficient, need to fetch full details
+                import logging
+                if not hasattr(self, '_map_errors_logged'):
+                    self._map_errors_logged = 0
+                if self._map_errors_logged < 3:
+                    logging.debug(f"Raw data mapping failed (will fetch): {e}")
+                    self._map_errors_logged += 1
                 token_one_id = raw_market["tokens"][0]["token_id"]
                 token_ids_to_fetch.append(token_one_id)
 
