@@ -210,7 +210,8 @@ class Polymarket:
             Dictionary mapping tag labels to tag IDs: {tag_label: tag_id}
         """
         try:
-            res = httpx.get(self.gamma_tags_endpoint)
+            # Try to fetch with a high limit to get ALL tags (API might paginate at 100 by default)
+            res = httpx.get(self.gamma_tags_endpoint, params={"limit": 1000})
             if res.status_code == 200:
                 tags_data = res.json()
                 # Build a mapping of label -> id
@@ -220,7 +221,7 @@ class Polymarket:
                     tag_id = tag.get("id")
                     if label and tag_id:
                         tag_map[label.lower()] = tag_id
-                print(f"[TAGS API] Found {len(tag_map)} tags from API")
+                print(f"[TAGS API] Found {len(tag_map)} tags from API (fetched with limit=1000)")
                 return tag_map
             else:
                 print(f"[TAGS API ERROR] Status {res.status_code}")
