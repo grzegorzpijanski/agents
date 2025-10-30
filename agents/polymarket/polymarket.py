@@ -73,16 +73,12 @@ class Polymarket:
         self._init_approvals(False)
 
     def _init_api_keys(self) -> None:
-        # EOA wallet with Polymarket Proxy
-        # The proxy address holds deposited funds and executes trades
-        polymarket_proxy = "0xBBbfD134E9b44BfB5123898BA36b01dE7ab93d98"
-
+        # Try signature_type=0 (direct wallet trading) after approvals have had time to sync
         self.client = ClobClient(
             self.clob_url,
             key=self.private_key,
             chain_id=self.chain_id,
-            signature_type=2,  # 2 = EOA with Polymarket Proxy
-            funder=polymarket_proxy  # Proxy address that holds deposited funds
+            signature_type=0,  # 0 = Standard EOA wallet (no proxy)
         )
         self.credentials = self.client.create_or_derive_api_creds()
         self.client.set_api_creds(self.credentials)
