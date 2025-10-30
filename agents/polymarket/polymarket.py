@@ -73,11 +73,15 @@ class Polymarket:
         self._init_approvals(False)
 
     def _init_api_keys(self) -> None:
+        # Get the wallet address from private key
+        funder_address = self.get_address_for_private_key()
+
         self.client = ClobClient(
             self.clob_url,
             key=self.private_key,
             chain_id=self.chain_id,
-            signature_type=2  # 2 = EOA wallet (MetaMask/hardware wallet)
+            signature_type=2,  # 2 = EOA wallet (MetaMask/hardware wallet)
+            funder=funder_address  # Explicitly set the funder address
         )
         self.credentials = self.client.create_or_derive_api_creds()
         self.client.set_api_creds(self.credentials)
