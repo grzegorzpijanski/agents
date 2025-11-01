@@ -55,7 +55,7 @@ class Polymarket:
         self.erc1155_set_approval = """[{"inputs": [{ "internalType": "address", "name": "operator", "type": "address" },{ "internalType": "bool", "name": "approved", "type": "bool" }],"name": "setApprovalForAll","outputs": [],"stateMutability": "nonpayable","type": "function"}]"""
 
         self.usdc_address = (
-            "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"  # New USDC contract on Polygon
+            "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (bridged) - required by Polymarket
         )
         self.ctf_address = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
@@ -73,15 +73,12 @@ class Polymarket:
         self._init_approvals(False)
 
     def _init_api_keys(self) -> None:
-        # Use signature_type=2 with proxy - funds deposited via web UI are in the proxy
-        polymarket_proxy = "0xBBbfD134E9b44BfB5123898BA36b01dE7ab93d98"
-
+        # Use signature_type=0 for direct EOA trading with USDC.e
         self.client = ClobClient(
             self.clob_url,
             key=self.private_key,
             chain_id=self.chain_id,
-            signature_type=2,  # 2 = EOA with Gnosis Safe proxy (web UI deposits)
-            funder=polymarket_proxy
+            signature_type=0,  # 0 = Standard EOA wallet (direct trading with on-chain USDC.e)
         )
         self.credentials = self.client.create_or_derive_api_creds()
         self.client.set_api_creds(self.credentials)
