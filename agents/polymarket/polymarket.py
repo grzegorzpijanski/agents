@@ -553,6 +553,76 @@ class Polymarket:
         all_events = self.get_all_events()
         return self.filter_events_for_trading(all_events)
 
+    def get_top_liquid_markets(self, limit: int = 50) -> "list[SimpleMarket]":
+        """
+        Get top markets by liquidity (most tradeable markets).
+
+        This uses the raw sampling data (1 API call) and sorts by liquidity,
+        then fetches full details only for the top N markets.
+
+        Args:
+            limit: Number of top markets to return (default: 50)
+
+        Returns:
+            List of top liquid markets
+        """
+        try:
+            # Get raw market data (1 API call for all markets)
+            raw_data = self.client.get_sampling_simplified_markets()
+            raw_markets = raw_data.get("data", [])
+
+            logger.info(f"[TOP MARKETS] Analyzing {len(raw_markets)} markets for liquidity...")
+
+            # Extract markets with liquidity info
+            markets_with_liquidity = []
+            for raw_market in raw_markets:
+                try:
+                    # Try to get liquidity from various possible fields
+                    liquidity = None
+                    if "liquidity" in raw_market:
+                        liquidity = float(raw_market.get("liquidity", 0))
+                    elif "liquidityClob" in raw_market:
+                        liquidity = float(raw_market.get("liquidityClob", 0))
+
+                    # Also get volume as a secondary sort key
+                    volume = float(raw_market.get("volume", 0) or raw_market.get("volume24hr", 0))
+
+                    if liquidity is not None and liquidity > 0:
+                        token_id = raw_market["tokens"][0]["token_id"]
+                        markets_with_liquidity.append({
+                            "token_id": token_id,
+                            "liquidity": liquidity,
+                            "volume": volume,
+                            "question": raw_market.get("question", "")[:60]
+                        })
+                except Exception as e:
+                    continue
+
+            # Sort by liquidity descending, then by volume
+            markets_with_liquidity.sort(key=lambda x: (x["liquidity"], x["volume"]), reverse=True)
+
+            # Take top N
+            top_markets_info = markets_with_liquidity[:limit]
+            logger.info(f"[TOP MARKETS] Selected top {len(top_markets_info)} markets by liquidity")
+
+            # Fetch full market details for top markets
+            top_markets = []
+            for market_info in top_markets_info:
+                try:
+                    market = self.get_market(market_info["token_id"])
+                    if market is not None:
+                        top_markets.append(market)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch market {market_info['question']}: {e}")
+                    continue
+
+            logger.info(f"[TOP MARKETS] Fetched {len(top_markets)} top liquid markets")
+            return top_markets
+
+        except Exception as e:
+            logger.error(f"Failed to get top liquid markets: {e}")
+            return []
+
     def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None, use_batch_fetch: bool = True) -> "list[SimpleEvent]":
         """
         Get sampling of simplified markets, optionally filtered by categories.
