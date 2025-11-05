@@ -208,28 +208,45 @@ class Polymarket:
 
     def get_tags_from_api(self) -> dict:
         """
-        Fetch all available tags/categories from Polymarket API.
+        Fetch all available tags/categories from Polymarket API with pagination support.
 
         Returns:
             Dictionary mapping tag labels to tag IDs: {tag_label: tag_id}
         """
         try:
-            # Try to fetch with a high limit to get ALL tags (API might paginate at 100 by default)
-            res = httpx.get(self.gamma_tags_endpoint, params={"limit": 1000})
-            if res.status_code == 200:
+            tag_map = {}
+            offset = 0
+            limit = 500  # Fetch in batches
+            max_iterations = 10  # Safety limit
+
+            for iteration in range(max_iterations):
+                res = httpx.get(self.gamma_tags_endpoint, params={"limit": limit, "offset": offset})
+                if res.status_code != 200:
+                    print(f"[TAGS API ERROR] Status {res.status_code} at offset {offset}")
+                    break
+
                 tags_data = res.json()
-                # Build a mapping of label -> id
-                tag_map = {}
+                if not tags_data:  # No more tags
+                    break
+
+                # Build mapping
                 for tag in tags_data:
                     label = tag.get("label", tag.get("slug", ""))
                     tag_id = tag.get("id")
                     if label and tag_id:
                         tag_map[label.lower()] = tag_id
-                print(f"[TAGS API] Found {len(tag_map)} tags from API (fetched with limit=1000)")
-                return tag_map
-            else:
-                print(f"[TAGS API ERROR] Status {res.status_code}")
-                return {}
+
+                fetched_count = len(tags_data)
+                print(f"[TAGS API] Fetched {fetched_count} tags at offset {offset} (total: {len(tag_map)})")
+
+                # If we got fewer than limit, we've reached the end
+                if fetched_count < limit:
+                    break
+
+                offset += limit
+
+            print(f"[TAGS API] ✅ Total tags fetched: {len(tag_map)}")
+            return tag_map
         except Exception as e:
             print(f"[TAGS API ERROR] {e}")
             return {}
@@ -621,6 +638,75 @@ class Polymarket:
 
         except Exception as e:
             logger.error(f"Failed to get top liquid markets: {e}")
+            return []
+
+    def get_all_active_markets_paginated(self, max_markets: int = 500) -> "list[SimpleMarket]":
+        """
+        Fetch ALL active markets without tag filtering using pagination.
+        This bypasses the 300-tag limit by fetching markets directly.
+
+        Args:
+            max_markets: Maximum number of markets to fetch (default: 500)
+
+        Returns:
+            List of active markets
+        """
+        try:
+            logger.info(f"[ALL MARKETS] Fetching up to {max_markets} active markets (no tag filtering)...")
+
+            all_markets = []
+            offset = 0
+            limit = 100  # Fetch in batches
+            seen_ids = set()
+
+            while len(all_markets) < max_markets:
+                try:
+                    params = {
+                        "closed": "false",  # Only active markets
+                        "limit": limit,
+                        "offset": offset
+                    }
+
+                    res = httpx.get(self.gamma_markets_endpoint, params=params)
+                    if res.status_code != 200:
+                        logger.warning(f"[ALL MARKETS] API returned status {res.status_code} at offset {offset}")
+                        break
+
+                    markets_data = res.json()
+                    if not markets_data:  # No more markets
+                        break
+
+                    # Convert to SimpleMarket objects, avoiding duplicates
+                    batch_count = 0
+                    for market_data in markets_data:
+                        market_id = market_data.get("id")
+                        if market_id and market_id not in seen_ids:
+                            market = self._parse_gamma_market(market_data)
+                            if market:
+                                all_markets.append(market)
+                                seen_ids.add(market_id)
+                                batch_count += 1
+
+                                if len(all_markets) >= max_markets:
+                                    break
+
+                    logger.info(f"[ALL MARKETS] Fetched {batch_count} markets at offset {offset} (total: {len(all_markets)})")
+
+                    # If we got fewer than limit, we've reached the end
+                    if len(markets_data) < limit:
+                        break
+
+                    offset += limit
+
+                except Exception as e:
+                    logger.warning(f"[ALL MARKETS] Error fetching batch at offset {offset}: {e}")
+                    break
+
+            logger.info(f"[ALL MARKETS] ✅ Total active markets fetched: {len(all_markets)}")
+            return all_markets
+
+        except Exception as e:
+            logger.error(f"Failed to fetch all active markets: {e}")
             return []
 
     def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None, use_batch_fetch: bool = True) -> "list[SimpleEvent]":
