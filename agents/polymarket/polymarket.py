@@ -592,6 +592,9 @@ class Polymarket:
 
             # Extract markets with liquidity info
             markets_with_liquidity = []
+            skipped_no_tokens = 0
+            skipped_no_liquidity = 0
+
             for raw_market in raw_markets:
                 try:
                     # Try to get liquidity from various possible fields
@@ -601,19 +604,43 @@ class Polymarket:
                     elif "liquidityClob" in raw_market:
                         liquidity = float(raw_market.get("liquidityClob", 0))
 
+                    # Skip markets without liquidity info
+                    if liquidity is None or liquidity <= 0:
+                        skipped_no_liquidity += 1
+                        continue
+
                     # Also get volume as a secondary sort key
                     volume = float(raw_market.get("volume", 0) or raw_market.get("volume24hr", 0))
 
-                    if liquidity is not None and liquidity > 0:
-                        token_id = raw_market["tokens"][0]["token_id"]
-                        markets_with_liquidity.append({
-                            "token_id": token_id,
-                            "liquidity": liquidity,
-                            "volume": volume,
-                            "question": raw_market.get("question", "")[:60]
-                        })
+                    # Get token_id - try multiple possible structures
+                    token_id = None
+                    if "tokens" in raw_market and raw_market["tokens"]:
+                        token_id = raw_market["tokens"][0].get("token_id")
+                    elif "clobTokenIds" in raw_market and raw_market["clobTokenIds"]:
+                        token_id = raw_market["clobTokenIds"][0]
+                    elif "clob_token_ids" in raw_market and raw_market["clob_token_ids"]:
+                        token_id = raw_market["clob_token_ids"][0]
+
+                    # Skip if we couldn't find a token ID
+                    if not token_id:
+                        skipped_no_tokens += 1
+                        continue
+
+                    markets_with_liquidity.append({
+                        "token_id": token_id,
+                        "liquidity": liquidity,
+                        "volume": volume,
+                        "question": raw_market.get("question", "")[:60]
+                    })
+
                 except Exception as e:
+                    print(f"[TOP MARKETS DEBUG] Error processing market: {e}")
                     continue
+
+            if skipped_no_liquidity > 0:
+                print(f"[TOP MARKETS DEBUG] Skipped {skipped_no_liquidity} markets without liquidity data")
+            if skipped_no_tokens > 0:
+                print(f"[TOP MARKETS DEBUG] Skipped {skipped_no_tokens} markets without token ID")
 
             # Sort by liquidity descending, then by volume
             markets_with_liquidity.sort(key=lambda x: (x["liquidity"], x["volume"]), reverse=True)
