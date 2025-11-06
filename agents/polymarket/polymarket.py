@@ -588,7 +588,7 @@ class Polymarket:
             raw_data = self.client.get_sampling_simplified_markets()
             raw_markets = raw_data.get("data", [])
 
-            logger.info(f"[TOP MARKETS] Analyzing {len(raw_markets)} markets for liquidity...")
+            print(f"[TOP MARKETS] Analyzing {len(raw_markets)} markets for liquidity...")
 
             # Extract markets with liquidity info
             markets_with_liquidity = []
@@ -620,7 +620,7 @@ class Polymarket:
 
             # Take top N
             top_markets_info = markets_with_liquidity[:limit]
-            logger.info(f"[TOP MARKETS] Selected top {len(top_markets_info)} markets by liquidity")
+            print(f"[TOP MARKETS] Selected top {len(top_markets_info)} markets by liquidity")
 
             # Fetch full market details for top markets
             top_markets = []
@@ -630,14 +630,14 @@ class Polymarket:
                     if market is not None:
                         top_markets.append(market)
                 except Exception as e:
-                    logger.warning(f"Failed to fetch market {market_info['question']}: {e}")
+                    print(f"[TOP MARKETS] Failed to fetch market {market_info['question']}: {e}")
                     continue
 
-            logger.info(f"[TOP MARKETS] Fetched {len(top_markets)} top liquid markets")
+            print(f"[TOP MARKETS] Fetched {len(top_markets)} top liquid markets")
             return top_markets
 
         except Exception as e:
-            logger.error(f"Failed to get top liquid markets: {e}")
+            print(f"[TOP MARKETS ERROR] Failed to get top liquid markets: {e}")
             return []
 
     def get_all_active_markets_paginated(self, max_markets: int = 500) -> "list[SimpleMarket]":
@@ -652,7 +652,7 @@ class Polymarket:
             List of active markets
         """
         try:
-            logger.info(f"[ALL MARKETS] Fetching up to {max_markets} active markets (no tag filtering)...")
+            print(f"[ALL MARKETS] Fetching up to {max_markets} active markets (no tag filtering)...")
 
             all_markets = []
             offset = 0
@@ -669,7 +669,7 @@ class Polymarket:
 
                     res = httpx.get(self.gamma_markets_endpoint, params=params)
                     if res.status_code != 200:
-                        logger.warning(f"[ALL MARKETS] API returned status {res.status_code} at offset {offset}")
+                        print(f"[ALL MARKETS] API returned status {res.status_code} at offset {offset}")
                         break
 
                     markets_data = res.json()
@@ -690,7 +690,7 @@ class Polymarket:
                                 if len(all_markets) >= max_markets:
                                     break
 
-                    logger.info(f"[ALL MARKETS] Fetched {batch_count} markets at offset {offset} (total: {len(all_markets)})")
+                    print(f"[ALL MARKETS] Fetched {batch_count} markets at offset {offset} (total: {len(all_markets)})")
 
                     # If we got fewer than limit, we've reached the end
                     if len(markets_data) < limit:
@@ -699,14 +699,14 @@ class Polymarket:
                     offset += limit
 
                 except Exception as e:
-                    logger.warning(f"[ALL MARKETS] Error fetching batch at offset {offset}: {e}")
+                    print(f"[ALL MARKETS] Error fetching batch at offset {offset}: {e}")
                     break
 
-            logger.info(f"[ALL MARKETS] ✅ Total active markets fetched: {len(all_markets)}")
+            print(f"[ALL MARKETS] ✅ Total active markets fetched: {len(all_markets)}")
             return all_markets
 
         except Exception as e:
-            logger.error(f"Failed to fetch all active markets: {e}")
+            print(f"[ALL MARKETS ERROR] Failed to fetch all active markets: {e}")
             return []
 
     def get_sampling_simplified_markets(self, allowed_categories: "list[str]" = None, use_batch_fetch: bool = True) -> "list[SimpleEvent]":
