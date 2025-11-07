@@ -574,7 +574,7 @@ class Polymarket:
         """
         Get top markets by liquidity (most tradeable markets).
 
-        This uses the raw sampling data (1 API call) and sorts by liquidity,
+        Uses Gamma API which includes liquidityClob data, sorts by liquidity,
         then fetches full details only for the top N markets.
 
         Args:
@@ -584,63 +584,65 @@ class Polymarket:
             List of top liquid markets
         """
         try:
-            # Get raw market data (1 API call for all markets)
-            raw_data = self.client.get_sampling_simplified_markets()
-            raw_markets = raw_data.get("data", [])
+            # Fetch more markets than needed to have a good selection after filtering
+            fetch_limit = min(limit * 4, 500)
 
+            # Get markets from Gamma API with liquidity data
+            params = {
+                "limit": fetch_limit,
+                "active": True,
+                "closed": False,
+                "archived": False
+            }
+
+            res = httpx.get(self.gamma_markets_endpoint, params=params)
+            if res.status_code != 200:
+                print(f"[TOP MARKETS ERROR] Gamma API returned status {res.status_code}")
+                return []
+
+            raw_markets = res.json()
             print(f"[TOP MARKETS] Analyzing {len(raw_markets)} markets for liquidity...")
 
             # Extract markets with liquidity info
             markets_with_liquidity = []
-            skipped_no_tokens = 0
             skipped_no_liquidity = 0
+            skipped_no_condition_id = 0
 
             for raw_market in raw_markets:
                 try:
-                    # Try to get liquidity from various possible fields
-                    liquidity = None
-                    if "liquidity" in raw_market:
-                        liquidity = float(raw_market.get("liquidity", 0))
-                    elif "liquidityClob" in raw_market:
-                        liquidity = float(raw_market.get("liquidityClob", 0))
+                    # Get liquidity from Gamma API
+                    liquidity = raw_market.get("liquidityClob", 0)
 
-                    # Skip markets without liquidity info
-                    if liquidity is None or liquidity <= 0:
+                    # Skip markets without liquidity
+                    if not liquidity or liquidity <= 0:
                         skipped_no_liquidity += 1
                         continue
 
-                    # Also get volume as a secondary sort key
-                    volume = float(raw_market.get("volume", 0) or raw_market.get("volume24hr", 0))
-
-                    # Get token_id - try multiple possible structures
-                    token_id = None
-                    if "tokens" in raw_market and raw_market["tokens"]:
-                        token_id = raw_market["tokens"][0].get("token_id")
-                    elif "clobTokenIds" in raw_market and raw_market["clobTokenIds"]:
-                        token_id = raw_market["clobTokenIds"][0]
-                    elif "clob_token_ids" in raw_market and raw_market["clob_token_ids"]:
-                        token_id = raw_market["clob_token_ids"][0]
-
-                    # Skip if we couldn't find a token ID
-                    if not token_id:
-                        skipped_no_tokens += 1
+                    # Get condition_id for fetching full market details
+                    condition_id = raw_market.get("conditionId")
+                    if not condition_id:
+                        skipped_no_condition_id += 1
                         continue
 
+                    # Also get volume as a secondary sort key
+                    volume = raw_market.get("volumeClob", 0)
+
                     markets_with_liquidity.append({
-                        "token_id": token_id,
-                        "liquidity": liquidity,
-                        "volume": volume,
+                        "condition_id": condition_id,
+                        "liquidity": float(liquidity),
+                        "volume": float(volume),
                         "question": raw_market.get("question", "")[:60]
                     })
 
                 except Exception as e:
-                    print(f"[TOP MARKETS DEBUG] Error processing market: {e}")
+                    print(f"[TOP MARKETS] Error processing market: {e}")
                     continue
 
+            print(f"[TOP MARKETS] Found {len(markets_with_liquidity)} markets with liquidity")
             if skipped_no_liquidity > 0:
-                print(f"[TOP MARKETS DEBUG] Skipped {skipped_no_liquidity} markets without liquidity data")
-            if skipped_no_tokens > 0:
-                print(f"[TOP MARKETS DEBUG] Skipped {skipped_no_tokens} markets without token ID")
+                print(f"[TOP MARKETS] Skipped {skipped_no_liquidity} markets without liquidity")
+            if skipped_no_condition_id > 0:
+                print(f"[TOP MARKETS] Skipped {skipped_no_condition_id} markets without condition_id")
 
             # Sort by liquidity descending, then by volume
             markets_with_liquidity.sort(key=lambda x: (x["liquidity"], x["volume"]), reverse=True)
@@ -649,22 +651,24 @@ class Polymarket:
             top_markets_info = markets_with_liquidity[:limit]
             print(f"[TOP MARKETS] Selected top {len(top_markets_info)} markets by liquidity")
 
-            # Fetch full market details for top markets
+            # Fetch full market details for top markets using condition_id
             top_markets = []
             for market_info in top_markets_info:
                 try:
-                    market = self.get_market(market_info["token_id"])
+                    market = self.get_market(market_info["condition_id"])
                     if market is not None:
                         top_markets.append(market)
                 except Exception as e:
                     print(f"[TOP MARKETS] Failed to fetch market {market_info['question']}: {e}")
                     continue
 
-            print(f"[TOP MARKETS] Fetched {len(top_markets)} top liquid markets")
+            print(f"[TOP MARKETS] Successfully fetched {len(top_markets)} top liquid markets")
             return top_markets
 
         except Exception as e:
             print(f"[TOP MARKETS ERROR] Failed to get top liquid markets: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def get_all_active_markets_paginated(self, max_markets: int = 500) -> "list[SimpleMarket]":
