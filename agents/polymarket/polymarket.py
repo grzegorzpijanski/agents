@@ -216,8 +216,8 @@ class Polymarket:
         try:
             tag_map = {}
             offset = 0
-            limit = 500  # Fetch in batches
-            max_iterations = 10  # Safety limit
+            limit = 300  # API max is 300 per page
+            max_iterations = 20  # Safety limit (allows up to 6000 tags)
 
             for iteration in range(max_iterations):
                 res = httpx.get(self.gamma_tags_endpoint, params={"limit": limit, "offset": offset})
@@ -226,26 +226,30 @@ class Polymarket:
                     break
 
                 tags_data = res.json()
-                if not tags_data:  # No more tags
+                if not tags_data or len(tags_data) == 0:  # No more tags
+                    print(f"[TAGS API] No more tags at offset {offset}, stopping pagination")
                     break
 
                 # Build mapping
+                tags_added = 0
                 for tag in tags_data:
                     label = tag.get("label", tag.get("slug", ""))
                     tag_id = tag.get("id")
                     if label and tag_id:
                         tag_map[label.lower()] = tag_id
+                        tags_added += 1
 
                 fetched_count = len(tags_data)
-                print(f"[TAGS API] Fetched {fetched_count} tags at offset {offset} (total: {len(tag_map)})")
+                print(f"[TAGS API] Page {iteration + 1}: Fetched {fetched_count} tags at offset {offset} (added {tags_added}, total: {len(tag_map)})")
 
-                # If we got fewer than limit, we've reached the end
-                if fetched_count < limit:
+                # If we got 0 tags, we've reached the end
+                # Don't use "fetched_count < limit" because API might have a max page size
+                if fetched_count == 0:
                     break
 
-                offset += limit
+                offset += fetched_count  # Use actual count, not limit
 
-            print(f"[TAGS API] ✅ Total tags fetched: {len(tag_map)}")
+            print(f"[TAGS API] ✅ Total unique tags fetched: {len(tag_map)}")
             return tag_map
         except Exception as e:
             print(f"[TAGS API ERROR] {e}")
