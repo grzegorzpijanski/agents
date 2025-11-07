@@ -255,19 +255,26 @@ class Polymarket:
             print(f"[TAGS API ERROR] {e}")
             return {}
 
-    def get_markets_by_tags(self, tag_labels: "list[str]", limit: int = 100) -> "list[SimpleMarket]":
+    def get_markets_by_tags(
+        self,
+        tag_labels: "list[str]",
+        limit: int = 100,
+        tag_map: dict = None
+    ) -> "list[SimpleMarket]":
         """
         Fetch markets filtered by specific tag labels using Polymarket API.
 
         Args:
             tag_labels: List of tag labels to filter by (e.g., ["politics", "crypto"])
             limit: Maximum markets to fetch per tag (default: 100)
+            tag_map: Optional pre-fetched tag map {label: tag_id} to avoid re-fetching
 
         Returns:
             List of markets matching the tags
         """
-        # Get tag IDs from API
-        tag_map = self.get_tags_from_api()
+        # Get tag IDs from API (only if not provided)
+        if tag_map is None:
+            tag_map = self.get_tags_from_api()
 
         markets = []
         seen_ids = set()
