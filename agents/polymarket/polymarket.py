@@ -664,11 +664,24 @@ class Polymarket:
 
             # Fetch full market details for top markets using condition_id
             top_markets = []
-            for market_info in top_markets_info:
+            for i, market_info in enumerate(top_markets_info):
                 try:
-                    market = self.get_market(market_info["condition_id"])
-                    if market is not None:
-                        top_markets.append(market)
+                    # Query by condition_id (NOT clob_token_ids)
+                    params = {"condition_id": market_info["condition_id"]}
+                    res = httpx.get(self.gamma_markets_endpoint, params=params)
+
+                    if res.status_code == 200:
+                        data = res.json()
+                        if data and len(data) > 0:
+                            raw_market = data[0]
+                            # Map to SimpleMarket
+                            market = self.map_api_to_market(raw_market)
+                            top_markets.append(market)
+                        else:
+                            print(f"[TOP MARKETS] No data returned for condition_id {market_info['condition_id']}")
+                    else:
+                        print(f"[TOP MARKETS] API error {res.status_code} for {market_info['question']}")
+
                 except Exception as e:
                     print(f"[TOP MARKETS] Failed to fetch market {market_info['question']}: {e}")
                     continue
