@@ -616,10 +616,9 @@ class Polymarket:
             raw_markets = res.json()
             print(f"[TOP MARKETS] Analyzing {len(raw_markets)} markets for liquidity...")
 
-            # Extract markets with liquidity info
+            # Extract markets with liquidity info and keep the raw market data
             markets_with_liquidity = []
             skipped_no_liquidity = 0
-            skipped_no_condition_id = 0
 
             for raw_market in raw_markets:
                 try:
@@ -631,20 +630,13 @@ class Polymarket:
                         skipped_no_liquidity += 1
                         continue
 
-                    # Get condition_id for fetching full market details
-                    condition_id = raw_market.get("conditionId")
-                    if not condition_id:
-                        skipped_no_condition_id += 1
-                        continue
-
                     # Also get volume as a secondary sort key
                     volume = raw_market.get("volumeClob", 0)
 
                     markets_with_liquidity.append({
-                        "condition_id": condition_id,
+                        "raw_market": raw_market,  # Keep the full raw data
                         "liquidity": float(liquidity),
                         "volume": float(volume),
-                        "question": raw_market.get("question", "")[:60]
                     })
 
                 except Exception as e:
@@ -654,53 +646,39 @@ class Polymarket:
             print(f"[TOP MARKETS] Found {len(markets_with_liquidity)} markets with liquidity")
             if skipped_no_liquidity > 0:
                 print(f"[TOP MARKETS] Skipped {skipped_no_liquidity} markets without liquidity")
-            if skipped_no_condition_id > 0:
-                print(f"[TOP MARKETS] Skipped {skipped_no_condition_id} markets without condition_id")
 
             # Sort by liquidity descending, then by volume
             markets_with_liquidity.sort(key=lambda x: (x["liquidity"], x["volume"]), reverse=True)
 
             # Take top N
-            top_markets_info = markets_with_liquidity[:limit]
-            print(f"[TOP MARKETS] Selected top {len(top_markets_info)} markets by liquidity")
+            top_markets_data = markets_with_liquidity[:limit]
+            print(f"[TOP MARKETS] Selected top {len(top_markets_data)} markets by liquidity")
 
-            # Fetch full market details for top markets using condition_id
+            # Map to SimpleMarket objects (NO re-fetching, use data we already have!)
             top_markets = []
-            for i, market_info in enumerate(top_markets_info):
+            for i, market_data in enumerate(top_markets_data):
                 try:
-                    # Query by condition_id (NOT clob_token_ids)
-                    params = {"condition_id": market_info["condition_id"]}
-                    res = httpx.get(self.gamma_markets_endpoint, params=params)
+                    raw_market = market_data["raw_market"]
 
-                    if res.status_code == 200:
-                        data = res.json()
-                        if data and len(data) > 0:
-                            raw_market = data[0]
+                    # Debug: Log fields for first market to diagnose filtering issues
+                    if i == 0:
+                        print(f"[TOP MARKETS DEBUG] First market fields: {list(raw_market.keys())}")
+                        print(f"[TOP MARKETS DEBUG] liquidityClob={raw_market.get('liquidityClob')}, volumeClob={raw_market.get('volumeClob')}")
 
-                            # Debug: Log fields for first market to diagnose filtering issues
-                            if i == 0:
-                                print(f"[TOP MARKETS DEBUG] First market fields: {list(raw_market.keys())}")
-                                print(f"[TOP MARKETS DEBUG] liquidity={raw_market.get('liquidity')}, liquidityClob={raw_market.get('liquidityClob')}")
-                                print(f"[TOP MARKETS DEBUG] volume={raw_market.get('volume')}, volumeClob={raw_market.get('volumeClob')}, volume24hr={raw_market.get('volume24hr')}")
+                    # Map to SimpleMarket (this will now preserve liquidityClob and volumeClob)
+                    market = self.map_api_to_market(raw_market)
 
-                            # Map to SimpleMarket
-                            market = self.map_api_to_market(raw_market)
+                    # Debug: Log parsed values for first market
+                    if i == 0:
+                        print(f"[TOP MARKETS DEBUG] After mapping: liquidity={market.liquidity}, volume={market.volume}")
 
-                            # Debug: Log parsed values for first market
-                            if i == 0:
-                                print(f"[TOP MARKETS DEBUG] After mapping: liquidity={market.liquidity}, volume={market.volume}")
-
-                            top_markets.append(market)
-                        else:
-                            print(f"[TOP MARKETS] No data returned for condition_id {market_info['condition_id']}")
-                    else:
-                        print(f"[TOP MARKETS] API error {res.status_code} for {market_info['question']}")
+                    top_markets.append(market)
 
                 except Exception as e:
-                    print(f"[TOP MARKETS] Failed to fetch market {market_info['question']}: {e}")
+                    print(f"[TOP MARKETS] Failed to map market: {e}")
                     continue
 
-            print(f"[TOP MARKETS] Successfully fetched {len(top_markets)} top liquid markets")
+            print(f"[TOP MARKETS] Successfully processed {len(top_markets)} top liquid markets")
             return top_markets
 
         except Exception as e:
