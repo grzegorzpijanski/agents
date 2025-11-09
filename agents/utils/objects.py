@@ -48,6 +48,8 @@ class SimpleMarket(BaseModel):
     liquidity: Optional[float] = None
     volume: Optional[float] = None
     tags: Optional[list] = None  # List of tag slugs for filtering
+    bestBid: Optional[list] = None  # Best bid prices for each outcome (what you GET when selling)
+    bestAsk: Optional[list] = None  # Best ask prices for each outcome (what you PAY when buying)
 
 
 class ClobReward(BaseModel):

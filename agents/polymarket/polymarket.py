@@ -479,6 +479,30 @@ class Polymarket:
             except:
                 pass
 
+        # Parse bestBid and bestAsk (actual tradeable prices)
+        best_bid_raw = market.get("bestBid", "")
+        best_ask_raw = market.get("bestAsk", "")
+
+        best_bid_list = None
+        if isinstance(best_bid_raw, list):
+            best_bid_list = best_bid_raw
+        elif isinstance(best_bid_raw, str) and best_bid_raw:
+            try:
+                import ast
+                best_bid_list = ast.literal_eval(best_bid_raw)
+            except:
+                pass
+
+        best_ask_list = None
+        if isinstance(best_ask_raw, list):
+            best_ask_list = best_ask_raw
+        elif isinstance(best_ask_raw, str) and best_ask_raw:
+            try:
+                import ast
+                best_ask_list = ast.literal_eval(best_ask_raw)
+            except:
+                pass
+
         # Parse liquidity - try multiple field names
         liquidity = None
         if "liquidity" in market:
@@ -527,6 +551,8 @@ class Polymarket:
             "liquidity": liquidity,
             "volume": volume,
             "tags": tags,
+            "bestBid": best_bid_list,  # Actual prices when selling
+            "bestAsk": best_ask_list,  # Actual prices when buying
         }
         if token_id:
             market_data["clob_token_ids"] = token_id
