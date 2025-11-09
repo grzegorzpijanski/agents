@@ -488,10 +488,12 @@ class Polymarket:
         elif "liquidityNum" in market:
             liquidity = float(market["liquidityNum"]) if market["liquidityNum"] else None
 
-        # Parse volume
+        # Parse volume - try multiple field names
         volume = None
         if "volume" in market:
             volume = float(market["volume"]) if market["volume"] else None
+        elif "volumeClob" in market:
+            volume = float(market["volumeClob"]) if market["volumeClob"] else None
         elif "volume24hr" in market:
             volume = float(market["volume24hr"]) if market["volume24hr"] else None
 
@@ -674,8 +676,20 @@ class Polymarket:
                         data = res.json()
                         if data and len(data) > 0:
                             raw_market = data[0]
+
+                            # Debug: Log fields for first market to diagnose filtering issues
+                            if i == 0:
+                                print(f"[TOP MARKETS DEBUG] First market fields: {list(raw_market.keys())}")
+                                print(f"[TOP MARKETS DEBUG] liquidity={raw_market.get('liquidity')}, liquidityClob={raw_market.get('liquidityClob')}")
+                                print(f"[TOP MARKETS DEBUG] volume={raw_market.get('volume')}, volumeClob={raw_market.get('volumeClob')}, volume24hr={raw_market.get('volume24hr')}")
+
                             # Map to SimpleMarket
                             market = self.map_api_to_market(raw_market)
+
+                            # Debug: Log parsed values for first market
+                            if i == 0:
+                                print(f"[TOP MARKETS DEBUG] After mapping: liquidity={market.liquidity}, volume={market.volume}")
+
                             top_markets.append(market)
                         else:
                             print(f"[TOP MARKETS] No data returned for condition_id {market_info['condition_id']}")
