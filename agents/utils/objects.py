@@ -50,6 +50,7 @@ class SimpleMarket(BaseModel):
     tags: Optional[list] = None  # List of tag slugs for filtering
     bestBid: Optional[list] = None  # Best bid prices for each outcome (what you GET when selling)
     bestAsk: Optional[list] = None  # Best ask prices for each outcome (what you PAY when buying)
+    conditionId: Optional[str] = None  # Condition ID for CLOB API queries
 
 
 class ClobReward(BaseModel):

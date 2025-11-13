@@ -553,10 +553,37 @@ class Polymarket:
             "tags": tags,
             "bestBid": best_bid_list,  # Actual prices when selling
             "bestAsk": best_ask_list,  # Actual prices when buying
+            "conditionId": market.get("conditionId"),  # For CLOB API queries
         }
         if token_id:
             market_data["clob_token_ids"] = token_id
         return SimpleMarket(**market_data)
+
+    def get_clob_market_data(self, condition_id: str) -> dict:
+        """
+        Fetch market data from CLOB API using condition ID.
+
+        This returns explicit token-to-outcome mapping with current prices.
+
+        Args:
+            condition_id: Market condition ID
+
+        Returns:
+            Dict with 'tokens' array containing token_id, outcome, price for each outcome
+        """
+        try:
+            response = httpx.get(
+                f"https://clob.polymarket.com/markets/{condition_id}",
+                timeout=10.0
+            )
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+
+        except Exception as e:
+            return None
 
     def get_all_events(self) -> "list[SimpleEvent]":
         events = []
